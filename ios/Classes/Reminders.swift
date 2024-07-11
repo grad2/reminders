@@ -106,7 +106,7 @@ class Reminders {
         let newCalendar: EKCalendar = EKCalendar(for: EKEntityType.reminder, eventStore: eventStore)
 
         newCalendar.title = title
-        newCalendar.source = defaultList?.source
+        newCalendar.source = eventStore.defaultCalendarForNewReminders()?.source
         do {
             try eventStore.saveCalendar(newCalendar, commit: true)
         } catch {
