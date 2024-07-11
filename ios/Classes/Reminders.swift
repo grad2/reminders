@@ -3,7 +3,7 @@ import EventKit
 class Reminders {
     let eventStore: EKEventStore = EKEventStore()
     var hasAccess: Bool = false
-    let defaultList: EKCalendar?
+    var defaultList: EKCalendar?
 
     init() {
         defaultList = eventStore.defaultCalendarForNewReminders()
@@ -44,6 +44,7 @@ class Reminders {
         }
         semaphore.wait()
         hasAccess = granted
+        defaultList = eventStore.defaultCalendarForNewReminders()
         return granted
     }
 
@@ -103,13 +104,13 @@ class Reminders {
 
     func saveRemList(_ title: String, _ completion: @escaping(String?) -> ()) {
         let newCalendar: EKCalendar = EKCalendar(for: EKEntityType.reminder, eventStore: eventStore)
-       
+
         newCalendar.title = title
         newCalendar.source = defaultList?.source
         do {
             try eventStore.saveCalendar(newCalendar, commit: true)
         } catch {
-            completion(error.localizedDescription)
+            completion("")
         }
         completion(newCalendar.calendarIdentifier)
     }
