@@ -116,13 +116,14 @@ class Reminders {
     }
 
     func deleteReminder(_ id: String, _ completion: @escaping(String?) -> ()) {
-        guard let reminder = eventStore.calendarItem(withIdentifier: id) as? EKReminder else {
+        let eventStoreLocal: EKEventStore = EKEventStore()
+        guard let reminder = eventStoreLocal.calendarItem(withIdentifier: id) as? EKReminder else {
             completion("Cannot find reminder with ID: \(id)")
             return
         }
 
         do {
-            try eventStore.remove(reminder, commit: true)
+            try eventStoreLocal.remove(reminder, commit: true)
         } catch {
             completion(error.localizedDescription)
         }
