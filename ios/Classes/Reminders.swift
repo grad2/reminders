@@ -104,31 +104,30 @@ class Reminders {
 
     func saveRemList(_ title: String, _ completion: @escaping(String?) -> ()) {
         let newCalendar: EKCalendar = EKCalendar(for: EKEntityType.reminder, eventStore: eventStore)
-
         newCalendar.title = title
         newCalendar.source = eventStore.defaultCalendarForNewReminders()?.source
+
         do {
             try eventStore.saveCalendar(newCalendar, commit: true)
+            completion(newCalendar.calendarIdentifier)
         } catch {
             completion("")
         }
-        completion(newCalendar.calendarIdentifier)
     }
 
     func deleteReminder(_ id: String, _ completion: @escaping(String?) -> ()) {
-        let eventStoreLocal: EKEventStore = EKEventStore()
-        guard let reminder = eventStoreLocal.calendarItem(withIdentifier: id) as? EKReminder else {
-            completion("Cannot find reminder with ID: \(id)")
-            return
-        }
+           guard let reminder = eventStore.calendarItem(withIdentifier: id) as? EKReminder else {
+               completion("Cannot find reminder with ID: \(id)")
+               return
+           }
 
-        do {
-            try eventStoreLocal.remove(reminder, commit: true)
-        } catch {
-            completion(error.localizedDescription)
-        }
-        completion(nil)
-    }
+           do {
+               try eventStore.remove(reminder, commit: true)
+               completion(nil)
+           } catch {
+               completion(error.localizedDescription)
+           }
+       }
 }
 
 struct Reminder : Codable {
