@@ -10,7 +10,9 @@ class Reminders {
     }
 
     func getDefaultList() -> String? {
-        if let defaultList = defaultList { return List(list: defaultList).toJson() }
+        if let defaultList = defaultList {
+            return List(list: defaultList).toJson()
+        }
         return nil
     }
 
@@ -24,24 +26,21 @@ class Reminders {
     func requestPermission() -> Bool {
         var granted = false
         let semaphore = DispatchSemaphore(value: 0)
-        if #available(iOS 17.0.0, *) {
 
+        if #available(iOS 17.0, *) {
             if #available(macOS 14.0, *) {
-                eventStore.requestFullAccessToReminders(completion: { (success, error) in
+                eventStore.requestFullAccessToReminders { (success, error) in
                     granted = success
                     semaphore.signal()
-                })
-            } else {
-                // Fallback on earlier versions
+                }
             }
-
-        }else{
-            eventStore.requestAccess(to: EKEntityType.reminder) { (success, error) in
+        } else {
+            eventStore.requestAccess(to: .reminder) { (success, error) in
                 granted = success
                 semaphore.signal()
             }
-
         }
+
         semaphore.wait()
         hasAccess = granted
         defaultList = eventStore.defaultCalendarForNewReminders()
@@ -55,30 +54,34 @@ class Reminders {
     }
 
     func getReminders(_ id: String?, _ completion: @escaping(String?) -> ()) {
-        var calendar: [EKCalendar]? = nil
-        if let id = id { calendar = [eventStore.calendar(withIdentifier: id) ?? EKCalendar()] }
-        let predicate: NSPredicate? = eventStore.predicateForReminders(in: calendar)
-        if let predicate = predicate {
-            eventStore.fetchReminders(matching: predicate) { (_ reminders: [Any]?) -> Void in
+        var calendar: [EKCalendar]?
+        if let id = id {
+            if let calendarItem = eventStore.calendar(withIdentifier: id) {
+                calendar = [calendarItem]
+            }
+        }
+
+        if let predicate = eventStore.predicateForReminders(in: calendar) {
+            eventStore.fetchReminders(matching: predicate) { reminders in
                 let rems = reminders as? [EKReminder] ?? [EKReminder]()
                 let result = rems.map { Reminder(reminder: $0) }
                 let json = try? JSONEncoder().encode(result)
                 completion(String(data: json ?? Data(), encoding: .utf8))
             }
+        } else {
+            completion(nil)
         }
     }
 
     func saveReminder(_ json: [String: Any], _ completion: @escaping(String?) -> ()) {
-        let reminder: EKReminder
-
-        guard json["list"] != nil,
-              let calendarID: String = json["list"] as? String,
-              let list: EKCalendar = eventStore.calendar(withIdentifier: calendarID) else {
+        guard let calendarID = json["list"] as? String,
+              let list = eventStore.calendar(withIdentifier: calendarID) else {
             return completion("Invalid calendarID")
         }
 
-        if let reminderID = json["id"] as? String {
-            reminder = eventStore.calendarItem(withIdentifier: reminderID) as! EKReminder
+        let reminder: EKReminder
+        if let reminderID = json["id"] as? String, let existingReminder = eventStore.calendarItem(withIdentifier: reminderID) as? EKReminder {
+            reminder = existingReminder
         } else {
             reminder = EKReminder(eventStore: eventStore)
         }
@@ -88,22 +91,23 @@ class Reminders {
         reminder.priority = json["priority"] as? Int ?? 0
         reminder.isCompleted = json["isCompleted"] as? Bool ?? false
         reminder.notes = json["notes"] as? String
+
         if let date = json["dueDate"] as? [String: Int] {
-            reminder.dueDateComponents = DateComponents(year: date["year"], month: date["month"], day: date["day"], hour: date["hour"], minute: date["minute"], second: date["second"] )
+            reminder.dueDateComponents = DateComponents(year: date["year"], month: date["month"], day: date["day"], hour: date["hour"], minute: date["minute"], second: date["second"])
         } else {
             reminder.dueDateComponents = nil
         }
 
         do {
             try eventStore.save(reminder, commit: true)
+            completion(reminder.calendarItemIdentifier)
         } catch {
             completion(error.localizedDescription)
         }
-        completion(reminder.calendarItemIdentifier)
     }
 
     func saveRemList(_ title: String, _ completion: @escaping(String?) -> ()) {
-        let newCalendar: EKCalendar = EKCalendar(for: EKEntityType.reminder, eventStore: eventStore)
+        let newCalendar = EKCalendar(for: .reminder, eventStore: eventStore)
         newCalendar.title = title
         newCalendar.source = eventStore.defaultCalendarForNewReminders()?.source
 
@@ -111,23 +115,23 @@ class Reminders {
             try eventStore.saveCalendar(newCalendar, commit: true)
             completion(newCalendar.calendarIdentifier)
         } catch {
-            completion("")
+            completion(nil)
         }
     }
 
     func deleteReminder(_ id: String, _ completion: @escaping(String?) -> ()) {
-           guard let reminder = eventStore.calendarItem(withIdentifier: id) as? EKReminder else {
-               completion("Cannot find reminder with ID: \(id)")
-               return
-           }
+        guard let reminder = eventStore.calendarItem(withIdentifier: id) as? EKReminder else {
+            completion("Cannot find reminder with ID: \(id)")
+            return
+        }
 
-           do {
-               try eventStore.remove(reminder, commit: true)
-               completion(nil)
-           } catch {
-               completion(error.localizedDescription)
-           }
-       }
+        do {
+            try eventStore.remove(reminder, commit: true)
+            completion(nil)
+        } catch {
+            completion(error.localizedDescription)
+        }
+    }
 }
 
 struct Reminder : Codable {
