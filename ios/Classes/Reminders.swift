@@ -122,6 +122,8 @@ class Reminders {
             return
         }
 
+        eventStore.reset()
+
         do {
             try eventStore.remove(reminder, commit: true)
             completion(nil)
